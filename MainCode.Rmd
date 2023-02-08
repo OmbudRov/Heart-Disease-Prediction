@@ -1,0 +1,313 @@
+---
+title: "JComp"
+output: html_notebook
+---
+
+```{r}
+library(Hmisc)
+library(ggplot2)
+library(ggcorrplot)
+library(dplyr)
+library(pROC)
+```
+
+
+```{r}
+#Reading the data
+AllData<-read.csv(file='heart.csv')
+Data<-AllData[1:626,]
+EvalData<-AllData[627:nrow(AllData),]
+#Print the first few rows of the data
+head(Data)
+```
+
+```{r}
+#Exploring the data via summary
+summary(Data)
+```
+
+```{r}
+describe(Data)
+```
+
+```{r}
+CorrData<-data.frame(Data$Age,Data$RestingBP,Data$Cholesterol,Data$FastingBS,Data$MaxHR,Data$Oldpeak,Data$HeartDisease)
+Corr=cor(CorrData)
+ggcorrplot(Corr,hc.order = TRUE,type="lower",lab = TRUE, lab_size = 3, method = "circle",colors = c("blue","white","red"),outline.color = "gray",show.legend = TRUE,show.diag = FALSE, title = "Correlogram Of The Data")
+```
+
+```{r}
+#Changing values to 0 and 1 for Female and Male respectively in Sex
+Data$Sex<-ifelse(Data$Sex=="M",1,0)
+EvalData$Sex<-ifelse(EvalData$Sex=="M",1,0)
+#Changing values to 0 and 1 for No and Yes respectively in ExcerciseAngina
+Data$ExerciseAngina<-ifelse(Data$ExerciseAngina=="Y",1,0)
+EvalData$ExerciseAngina<-ifelse(EvalData$ExerciseAngina=="Y",1,0)
+```
+
+```{r}
+#Changing values to 0, 1, 2 and 3 for TA, ATA, NAP and ASY respectively in ChestPainType
+Data$ChestPainType=factor(Data$ChestPainType,levels=c('TA','ATA','NAP','ASY'),labels = c('0','1','2','3'))
+EvalData$ChestPainType=factor(EvalData$ChestPainType,levels=c('TA','ATA','NAP','ASY'),labels = c('0','1','2','3'))
+#Changing values to 0, 1 and 2 for Normal, ST and LVH respectively in RestingECG
+Data$RestingECG=factor(Data$RestingECG, levels = c('Normal','ST','LVH'),labels = c('0','1','2'))
+EvalData$RestingECG=factor(EvalData$RestingECG,levels=c('Normal','ST','LVH'),labels = c('0','1','2'))
+#Changing values to 0, 1 and 2 for UP, FLAT, DOWN respectively in ST_Slope
+Data$ST_Slope=factor(Data$ST_Slope,levels=c('Up','Flat','Down'),labels=c('0','1','2'))
+EvalData$ST_Slope=factor(EvalData$ST_Slope,levels=c('Up','Flat','Down'),labels=c('0','1','2'))
+```
+
+```{r}
+#Converting Some Columns to Factors
+Data$Sex<-as.factor(Data$Sex)
+Data$ExerciseAngina<-as.factor(Data$ExerciseAngina)
+Data$FastingBS<-as.factor(Data$FastingBS)
+Data$HeartDisease<-as.factor(Data$HeartDisease)
+EvalData$Sex<-as.factor(EvalData$Sex)
+EvalData$ExerciseAngina<-as.factor(EvalData$ExerciseAngina)
+EvalData$FastingBS<-as.factor(EvalData$FastingBS)
+EvalData$HeartDisease<-as.factor(EvalData$HeartDisease)
+```
+
+```{r}
+#Converting Some Columns to numeric
+Data$RestingBP<-as.numeric(Data$RestingBP)
+Data$Age<-as.numeric(Data$Age)
+Data$Cholesterol<-as.numeric(Data$Cholesterol)
+Data$MaxHR<-as.numeric(Data$MaxHR)
+EvalData$RestingBP<-as.numeric(EvalData$RestingBP)
+EvalData$Age<-as.numeric(EvalData$Age)
+EvalData$Cholesterol<-as.numeric(EvalData$Cholesterol)
+EvalData$MaxHR<-as.numeric(EvalData$MaxHR)
+```
+
+```{r}
+#Counting number of data points where the person has heart disease
+Data %>% count(HeartDisease)
+```
+
+```{r}
+xtabs(~HeartDisease+Sex,data=Data)
+```
+
+```{r}
+#Boxplots for numeric values
+Age<-Data$Age
+HeartDisease<-Data$HeartDisease
+boxplot(Age ~ HeartDisease, col=c('red','blue'))
+legend("topright",c("No Heart Disease","Heart Disease"),border="black",fill=c('red','blue'))
+Cholesterol<-Data$Cholesterol
+boxplot(Cholesterol ~ HeartDisease, col=c('red','blue'))
+legend("topright",c("No Heart Disease","Heart Disease"),border="black",fill=c('red','blue'))
+MaxHR<-Data$MaxHR
+boxplot(MaxHR ~ HeartDisease, col=c('red','blue'))
+legend("topright",c("No Heart Disease","Heart Disease"),border="black",fill=c('red','blue'))
+Oldpeak<-Data$Oldpeak
+boxplot(Oldpeak ~ HeartDisease, col=c('red','blue'))
+legend("topright",c("No Heart Disease","Heart Disease"),border="black",fill=c('red','blue'))
+RestingBP<-Data$RestingBP
+boxplot(RestingBP ~ HeartDisease, col=c('red','blue'))
+legend("topright",c("No Heart Disease","Heart Disease"),border="black",fill=c('red','blue'))
+```
+
+
+```{r}
+#Changing values of Outliers in RestingBP and Cholestrol since values of 0 isnt possible for them
+Data1<-Data
+Data1$Cholesterol[Data1$Cholesterol==0]<-100
+Data1$RestingBP[Data1$RestingBP==0]<-80
+Data1
+```
+
+```{r}
+HeartDisease<-Data1$HeartDisease
+Cholesterol<-Data1$Cholesterol
+boxplot(Cholesterol ~ HeartDisease, col=c('red','blue'))
+legend("topright",c("No Heart Disease","Heart Disease"),border="black",fill=c('red','blue'))
+RestingBP<-Data1$RestingBP
+boxplot(RestingBP ~ HeartDisease, col=c('red','blue'))
+legend("topright",c("No Heart Disease","Heart Disease"),border="black",fill=c('red','blue'))
+```
+
+```{r}
+model1<-glm(HeartDisease~. , family=binomial(link="logit"), data=Data)
+summary(model1)
+model1a<-glm(HeartDisease~. , family=binomial(link="logit"), data=Data1)
+```
+```{r}
+drop1(model1,test = "Chi")
+```
+
+```{r}
+#Removing non-significant terms with the help of function `drop1’, we fit a reduced model.
+model2<-glm(HeartDisease ~ Sex + ChestPainType + FastingBS + MaxHR +ExerciseAngina + Oldpeak + ST_Slope,family = binomial(link = "logit"), data = Data)
+model2a<-glm(HeartDisease ~ Sex + ChestPainType + FastingBS + MaxHR +ExerciseAngina + Oldpeak + ST_Slope,family = binomial(link = "logit"), data = Data1)
+summary(model2)
+```
+
+```{r}
+#Building a model with attributes which are commonly associated with heart diseases
+model3<-glm(HeartDisease~ Cholesterol + Sex + RestingBP + Age + FastingBS, family=binomial(link="logit"), data=Data)
+model3a<-glm(HeartDisease~ Cholesterol + Sex + RestingBP + Age + FastingBS, family=binomial(link="logit"), data=Data1)
+summary(model3)
+```
+
+```{r}
+#We see that RestingBP is not significant, hence we will remove it
+model4<-glm(HeartDisease~ Cholesterol + Sex + Age + FastingBS, family=binomial(link="logit"), data=Data)
+model4a<-glm(HeartDisease~ Cholesterol + Sex + Age + FastingBS, family=binomial(link="logit"), data=Data1)
+summary(model4)
+```
+
+```{r}
+#Next we make a model using ECG related results
+model5<-glm(HeartDisease~  MaxHR + RestingECG + Oldpeak + ST_Slope+ ChestPainType + ExerciseAngina, family=binomial(link="logit"), data=Data)
+model5a<-glm(HeartDisease~ MaxHR + RestingECG + Oldpeak + ST_Slope+ ChestPainType + ExerciseAngina, family=binomial(link="logit"), data=Data1)
+summary(model5)
+```
+
+```{r}
+#Now we fit a reduced model with only the significant features
+model6<-glm(HeartDisease~  MaxHR +  Oldpeak + ST_Slope+ ChestPainType,family=binomial(link="logit"), data=Data)
+model6a<-glm(HeartDisease~ MaxHR +  Oldpeak + ST_Slope+ ChestPainType , family=binomial(link="logit"), data=Data1)
+summary(model6)
+```
+
+
+```{r}
+model1P=predict(model1,newdata = EvalData[-12],type ='response')
+model1P<-ifelse(model1P>0.5,1,0)
+model1aP=predict(model1a,newdata = EvalData[-12],type ='response')
+model1aP<-ifelse(model1aP>0.5,1,0)
+
+model2P=predict(model2,newdata = EvalData[-12],type ='response')
+model2P<-ifelse(model2P>0.5,1,0)
+model2aP=predict(model2a,newdata = EvalData[-12],type ='response')
+model2aP<-ifelse(model2aP>0.5,1,0)
+
+model3P=predict(model3,newdata = EvalData[-12],type ='response')
+model3P<-ifelse(model3P>0.5,1,0)
+model3aP=predict(model3a,newdata = EvalData[-12],type ='response')
+model3aP<-ifelse(model3aP>0.5,1,0)
+
+model4P=predict(model4,newdata = EvalData[-12],type ='response')
+model4P<-ifelse(model4P>0.5,1,0)
+model4aP=predict(model4a,newdata = EvalData[-12],type ='response')
+model4aP<-ifelse(model4aP>0.5,1,0)
+
+model5P=predict(model5,newdata = EvalData[-12],type ='response')
+model5P<-ifelse(model5P>0.5,1,0)
+model5aP=predict(model5a,newdata = EvalData[-12],type ='response')
+model5aP<-ifelse(model5aP>0.5,1,0)
+
+model6P=predict(model6,newdata = EvalData[-12],type ='response')
+model6P<-ifelse(model6P>0.5,1,0)
+model6aP=predict(model6a,newdata = EvalData[-12],type ='response')
+model6aP<-ifelse(model6aP>0.5,1,0)
+
+```
+
+```{r}
+roc_score1=roc(EvalData[,12],model1P)
+auc1<-as.numeric(roc_score1[9])
+auc1<-round(auc1,digits=4)
+plot(roc_score1,main="ROC of model1")
+text(0.5,0.2,auc1)
+
+roc_score1a=roc(EvalData[,12],model1aP)
+auc1a<-as.numeric(roc_score1a[9])
+auc1a<-round(auc1a,digits=4)
+plot(roc_score1a,main="ROC of model1a")
+text(0.5,0.2,auc1a)
+
+```
+
+```{r}
+roc_score2=roc(EvalData[,12],model2P)
+auc2<-as.numeric(roc_score2[9])
+auc2<-round(auc2,digits=4)
+plot(roc_score2,main="ROC of model2")
+text(0.5,0.2,auc2)
+
+roc_score2a=roc(EvalData[,12],model2aP)
+auc2a<-as.numeric(roc_score2a[9])
+auc2a<-round(auc2a,digits=4)
+plot(roc_score2a,main="ROC of model2a")
+text(0.5,0.2,auc2a)
+
+```
+
+```{r}
+roc_score3=roc(EvalData[,12],model3P)
+auc3<-as.numeric(roc_score3[9])
+auc3<-round(auc3,digits=4)
+plot(roc_score3,main="ROC of model3")
+text(0.5,0.2,auc3)
+
+roc_score3a=roc(EvalData[,12],model3aP)
+auc3a<-as.numeric(roc_score3a[9])
+auc3a<-round(auc3a,digits=4)
+plot(roc_score3a,main="ROC of model3a")
+text(0.5,0.2,auc3a)
+
+```
+
+```{r}
+roc_score4=roc(EvalData[,12],model4P)
+auc4<-as.numeric(roc_score4[9])
+auc4<-round(auc4,digits=4)
+plot(roc_score4,main="ROC of model4")
+text(0.5,0.2,auc4)
+
+roc_score4a=roc(EvalData[,12],model4aP)
+auc4a<-as.numeric(roc_score4a[9])
+auc4a<-round(auc4a,digits=4)
+plot(roc_score4a,main="ROC of model4a")
+text(0.5,0.2,auc4a)
+
+```
+
+```{r}
+roc_score5=roc(EvalData[,12],model5P)
+auc5<-as.numeric(roc_score5[9])
+auc5<-round(auc5,digits=4)
+plot(roc_score5,main="ROC of model5")
+text(0.5,0.2,auc5)
+
+roc_score5a=roc(EvalData[,12],model5aP)
+auc5a<-as.numeric(roc_score5a[9])
+auc5a<-round(auc5a,digits=4)
+plot(roc_score5a,main="ROC of model5a")
+text(0.5,0.2,auc5a)
+
+```
+
+```{r}
+roc_score6=roc(EvalData[,12],model6P)
+auc6<-as.numeric(roc_score6[9])
+auc6<-round(auc6,digits=4)
+plot(roc_score6,main="ROC of model6")
+text(0.5,0.2,auc6)
+
+roc_score6a=roc(EvalData[,12],model6aP)
+auc6a<-as.numeric(roc_score6a[9])
+auc6a<-round(auc6a,digits=4)
+plot(roc_score6a,main="ROC of model6a")
+text(0.5,0.2,auc6a)
+
+```
+
+```{r}
+RocScores<-c(roc_score1[9],roc_score2[9],roc_score3[9],roc_score4[9],roc_score5[9],roc_score6[9])
+RocScores<-as.numeric(RocScores)
+```
+
+```{r}
+AlternativeRocScores<-c(roc_score1a[9],roc_score2a[9],roc_score3a[9],roc_score4a[9],roc_score5a[9],roc_score6a[9])
+AlternativeRocScores<-as.numeric(AlternativeRocScores)
+
+ROCTable<-data.frame(RocScores,AlternativeRocScores)
+rownames(ROCTable)<-c("Model1","Model2","Model3","Model4","Model5","Model6")
+ROCTable$AverageRocScores<-rowMeans(ROCTable)
+ROCTable
+```
